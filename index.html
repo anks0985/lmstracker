@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gist API Test with Table</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; }
+    label { display: block; margin: 15px 0 5px; }
+    input, select { width: 100%; padding: 8px; box-sizing: border-box; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f5f5f5; }
+    button { margin: 10px 0; padding: 8px 16px; }
+    .status { margin-top: 10px; font-style: italic; }
+    .add-row-btn { margin-top: 10px; }
+    .del-row-btn { background: transparent; border: none; color: red; cursor: pointer; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h2>Gist API Table Test</h2>
+
+  <label for="token">GitHub Token (scope: gist):</label>
+  <input type="password" id="token" placeholder="ghp_..." />
+
+  <label for="gistId">Gist ID:</label>
+  <input type="text" id="gistId" placeholder="abcdef1234567890" />
+
+  <label for="filename">Filename in Gist:</label>
+  <input type="text" id="filename" placeholder="features.json" value="features.json" />
+
+  <h3>Feature Matrix</h3>
+  <table id="featureTable">
+    <thead>
+      <tr>
+        <th>Role</th>
+        <th>Description</th>
+        <th>Version</th>
+        <th>Delete</th>
+      </tr>
+    </thead>
+    <tbody id="featureBody">
+      <tr>
+        <td>
+          <select class="role-cell">
+            <option>Super Admin</option>
+            <option>Tenant Admin</option>
+            <option>Teacher</option>
+            <option>Student</option>
+          </select>
+        </td>
+        <td><input type="text" class="desc-cell" value="Create/Manage Tenants" /></td>
+        <td>
+          <select class="version-cell">
+            <option>V1.0</option>
+            <option>V2.0</option>
+            <option>V3.0</option>
+            <option>V4.0</option>
+          </select>
+        </td>
+        <td><button class="del-row-btn">×</button></td>
+      </tr>
+    </tbody>
+  </table>
+  <button class="add-row-btn">Add Row</button>
+
+  <div class="status" id="status">Status: Idle</div>
+
+  <script>
+    const roles = ["Super Admin","Tenant Admin","Teacher","Student"];
+    const versions = ["V1.0","V2.0","V3.0","V4.0"];
+    const featureBody = document.getElementById('featureBody');
+    const statusEl = document.getElementById('status');
+
+    function getTableData() {
+      const data = [];
+      featureBody.querySelectorAll('tr').forEach(row => {
+        const role = row.querySelector('.role-cell').value;
+        const description = row.querySelector('.desc-cell').value.trim();
+        const version = row.querySelector('.version-cell').value;
+        if (description) data.push({ role, description, version });
+      });
+      return data;
+    }
+
+    async function saveToGist() {
+      const token = document.getElementById('token').value.trim();
+      const gistId = document.getElementById('gistId').value.trim();
+      const filename = document.getElementById('filename').value.trim();
+      if (!token || !gistId || !filename) {
+        statusEl.textContent = 'Status: Fill token, Gist ID & filename';
+        return;
+      }
+      const content = JSON.stringify(getTableData(), null, 2);
+      const payload = { files: { [filename]: { content } } };
+      statusEl.textContent = 'Status: Saving...';
+      try {
+        const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        statusEl.textContent = 'Status: Saved successfully';
+      } catch(err) {
+        statusEl.textContent = 'Status: Error - ' + err.message;
+      }
+    }
+
+    // Auto-save on changes (debounced)
+    let timeout;
+    function scheduleSave() {
+      clearTimeout(timeout);
+      timeout = setTimeout(saveToGist, 1000);
+    }
+
+    // Add row
+    document.querySelector('.add-row-btn').addEventListener('click', () => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><select class="role-cell">${roles.map(r=>`<option>${r}</option>`).join('')}</select></td>
+        <td><input type="text" class="desc-cell" /></td>
+        <td><select class="version-cell">${versions.map(v=>`<option>${v}</option>`).join('')}</select></td>
+        <td><button class="del-row-btn">×</button></td>
+      `;
+      featureBody.appendChild(tr);
+      scheduleSave();
+    });
+
+    // Delete row & listen for changes
+    featureBody.addEventListener('click', e => {
+      if (e.target.classList.contains('del-row-btn')) {
+        e.target.closest('tr').remove();
+        scheduleSave();
+      }
+    });
+    featureBody.addEventListener('input', scheduleSave);
+    featureBody.addEventListener('change', scheduleSave);
+  </script>
+</body>
+</html>
